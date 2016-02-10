@@ -1178,6 +1178,8 @@ void TNonblockingServer::stop() {
   for (uint32_t i = 0; i < ioThreads_.size(); ++i) {
     ioThreads_[i]->stop();
   }
+
+  stopped_ = true;
 }
 
 void TNonblockingServer::registerEvents(event_base* user_event_base) {
@@ -1261,6 +1263,38 @@ void TNonblockingServer::serve() {
     ioThreads_[i]->join();
     GlobalOutput.printf("TNonblocking: join done for IO thread #%d", i);
   }
+}
+
+void
+TNonblockingServer::preServeNonblocking()
+{
+    if (ioThreads_.empty())
+    {
+        registerEvents(NULL);
+    }
+
+	ioThreads_[0]->preRunNonblocking();
+}
+
+bool
+TNonblockingServer::serveNonblocking()
+{
+	// Run the primary (listener) IO thread loop in our main thread.
+    ioThreads_[0]->runNonblocking();
+	return !stopped_;
+}
+
+void
+TNonblockingServer::postServeNonblocking()
+{
+	ioThreads_[0]->postRunNonblocking();
+
+    // Ensure all threads are finished before exiting serve()
+    for (uint32_t i = 0; i < ioThreads_.size(); ++i)
+    {
+        ioThreads_[i]->join();
+        GlobalOutput.printf("TNonblocking: join done for IO thread #%d", i);
+    }
 }
 
 TNonblockingIOThread::TNonblockingIOThread(TNonblockingServer* server,
@@ -1551,6 +1585,38 @@ void TNonblockingIOThread::run() {
   cleanupEvents();
 
   GlobalOutput.printf("TNonblockingServer: IO thread #%d run() done!", number_);
+}
+
+void
+TNonblockingIOThread::preRunNonblocking()
+{
+	if (eventBase_ == NULL)
+		registerEvents();
+
+	GlobalOutput.printf("TNonblockingServer: IO thread #%d entering loop...", number_);
+
+	if (useHighPriority_) {
+		setCurrentThreadHighPriority(true);
+	}
+}
+
+void
+TNonblockingIOThread::runNonblocking()
+{
+	event_base_loop(eventBase_, EVLOOP_NONBLOCK);
+}
+
+void
+TNonblockingIOThread::postRunNonblocking()
+{
+	if (useHighPriority_) {
+		setCurrentThreadHighPriority(false);
+	}
+
+	// cleans up our registered events
+	cleanupEvents();
+
+	GlobalOutput.printf("TNonblockingServer: IO thread #%d run() done!", number_);
 }
 
 void TNonblockingIOThread::cleanupEvents() {

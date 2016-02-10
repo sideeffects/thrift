@@ -269,6 +269,8 @@ private:
    */
   std::vector<TConnection*> activeConnections_;
 
+  bool stopped_;
+
   /**
    * Called when server socket had something happen.  We accept all waiting
    * client connections on listen socket fd and assign TConnection objects
@@ -304,6 +306,7 @@ private:
     overloaded_ = false;
     nConnectionsDropped_ = 0;
     nTotalConnectionsDropped_ = 0;
+	stopped_ = false;
   }
 
 public:
@@ -680,6 +683,12 @@ public:
    */
   void serve();
 
+  void preServeNonblocking();
+
+  bool serveNonblocking();
+
+  void postServeNonblocking();
+
   /**
    * Causes the server to terminate gracefully (can be called from any thread).
    */
@@ -785,6 +794,10 @@ public:
 
   // Enters the event loop and does not return until a call to stop().
   virtual void run();
+
+  void preRunNonblocking();
+  void runNonblocking();
+  void postRunNonblocking();
 
   // Exits the event loop as soon as possible.
   void stop();
