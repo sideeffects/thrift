@@ -62,16 +62,16 @@ class TimeoutTest(unittest.TestCase):
             socket.open()
             lsock = self.listen_sock.accept()
             while True:
-                socket.write("hi" * 100)
+                lsock.write("hi" * 100)
 
         except:
             self.assert_(time.time() - starttime < 5.0)
 
 if __name__ == '__main__':
-  suite = unittest.TestSuite()
-  loader = unittest.TestLoader()
+    suite = unittest.TestSuite()
+    loader = unittest.TestLoader()
 
-  suite.addTest(loader.loadTestsFromTestCase(TimeoutTest))
+    suite.addTest(loader.loadTestsFromTestCase(TimeoutTest))
 
-  testRunner = unittest.TextTestRunner(verbosity=2)
-  testRunner.run(suite)
+    testRunner = unittest.TextTestRunner(verbosity=2)
+    testRunner.run(suite)

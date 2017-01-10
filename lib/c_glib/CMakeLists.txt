@@ -37,6 +37,8 @@ set(thrift_c_glib_SOURCES
     src/thrift/c_glib/protocol/thrift_protocol_factory.c
     src/thrift/c_glib/protocol/thrift_binary_protocol.c
     src/thrift/c_glib/protocol/thrift_binary_protocol_factory.c
+    src/thrift/c_glib/protocol/thrift_compact_protocol.c
+    src/thrift/c_glib/protocol/thrift_compact_protocol_factory.c
     src/thrift/c_glib/transport/thrift_transport.c
     src/thrift/c_glib/transport/thrift_transport_factory.c
     src/thrift/c_glib/transport/thrift_buffered_transport_factory.c
@@ -45,6 +47,7 @@ set(thrift_c_glib_SOURCES
     src/thrift/c_glib/transport/thrift_server_transport.c
     src/thrift/c_glib/transport/thrift_server_socket.c
     src/thrift/c_glib/transport/thrift_buffered_transport.c
+    src/thrift/c_glib/transport/thrift_fd_transport.c
     src/thrift/c_glib/transport/thrift_framed_transport.c
     src/thrift/c_glib/transport/thrift_memory_buffer.c
     src/thrift/c_glib/server/thrift_server.c
@@ -59,6 +62,9 @@ TARGET_LINK_LIBRARIES_THRIFT(thrift_c_glib ${SYSLIBS})
 
 # Install the headers
 install(DIRECTORY "src/thrift" DESTINATION "${INCLUDE_INSTALL_DIR}"
+    FILES_MATCHING PATTERN "*.h")
+# Copy config.h file
+install(DIRECTORY "${CMAKE_BINARY_DIR}/thrift" DESTINATION "${INCLUDE_INSTALL_DIR}"
     FILES_MATCHING PATTERN "*.h")
 
 if(BUILD_TESTING)

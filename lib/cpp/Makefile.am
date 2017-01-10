@@ -28,14 +28,19 @@ moc__%.cpp: %.h
 SUBDIRS = .
 
 if WITH_TESTS
+# This file is needed by compiler with plugin, while test/Makefile.am needs compiler
+# So test directory is directly picked by top level Makefile.am for plugin build
+if !WITH_PLUGIN
 SUBDIRS += test
+endif
 endif
 
 pkgconfigdir = $(libdir)/pkgconfig
 
 lib_LTLIBRARIES = libthrift.la
 pkgconfig_DATA = thrift.pc
-libthrift_la_LDFLAGS = -release $(VERSION) $(BOOST_LDFLAGS) $(OPENSSL_LDFLAGS)
+libthrift_la_LDFLAGS = -release $(VERSION)
+libthrift_la_LIBADD = $(BOOST_LDFLAGS) $(OPENSSL_LDFLAGS) $(OPENSSL_LIBS)
 
 ## We only build the extra libraries if we have the dependencies,
 ## but we install all of the headers unconditionally.
@@ -58,7 +63,6 @@ endif
 
 AM_CXXFLAGS = -Wall -Wextra -pedantic
 AM_CPPFLAGS = $(BOOST_CPPFLAGS) $(OPENSSL_INCLUDES) -I$(srcdir)/src -D__STDC_LIMIT_MACROS
-AM_LDFLAGS = $(BOOST_LDFLAGS) $(OPENSSL_LDFLAGS)
 
 # Define the source files for the module
 

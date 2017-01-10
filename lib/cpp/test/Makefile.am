@@ -101,7 +101,7 @@ endif
 TESTS_ENVIRONMENT= \
 	BOOST_TEST_LOG_SINK=tests.xml \
 	BOOST_TEST_LOG_LEVEL=test_suite \
-	BOOST_TEST_LOG_FORMAT=xml
+	BOOST_TEST_LOG_FORMAT=XML
 
 TESTS = \
 	$(check_PROGRAMS)
@@ -115,7 +115,6 @@ UnitTests_SOURCES = \
 	TypedefTest.cpp \
 	TServerSocketTest.cpp \
 	TServerTransportTest.cpp \
-	TestPortFixture.h \
 	TTransportCheckThrow.h
 
 if !WITH_BOOSTTHREADS
@@ -326,7 +325,9 @@ OpenSSLManualInitTest_SOURCES = \
 
 OpenSSLManualInitTest_LDADD = \
 	$(top_builddir)/lib/cpp/libthrift.la \
-	$(BOOST_TEST_LDADD)
+	$(BOOST_TEST_LDADD) \
+	$(OPENSSL_LDFLAGS) \
+	$(OPENSSL_LIBS)
 
 #
 # Common thrift code generation rules
@@ -357,7 +358,7 @@ gen-cpp/SecondService.cpp gen-cpp/ThriftTest_constants.cpp gen-cpp/ThriftTest.cp
 gen-cpp/ChildService.cpp gen-cpp/ChildService.h gen-cpp/ParentService.cpp gen-cpp/ParentService.h gen-cpp/proc_types.cpp gen-cpp/proc_types.h: processor/proc.thrift
 	$(THRIFT) --gen cpp:templates,cob_style $<
 
-AM_CPPFLAGS = $(BOOST_CPPFLAGS) -I$(top_srcdir)/lib/cpp/src -D__STDC_LIMIT_MACROS
+AM_CPPFLAGS = $(BOOST_CPPFLAGS) -I$(top_srcdir)/lib/cpp/src -D__STDC_LIMIT_MACROS -I.
 AM_LDFLAGS = $(BOOST_LDFLAGS)
 AM_CXXFLAGS = -Wall -Wextra -pedantic
 

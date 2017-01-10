@@ -108,7 +108,12 @@ void initializeOpenSSL() {
   SSL_library_init();
   SSL_load_error_strings();
   // static locking
+  // newer versions of OpenSSL changed CRYPTO_num_locks - see THRIFT-3878
+#ifdef CRYPTO_num_locks
+  mutexes = boost::shared_array<Mutex>(new Mutex[CRYPTO_num_locks()]);
+#else
   mutexes = boost::shared_array<Mutex>(new Mutex[ ::CRYPTO_num_locks()]);
+#endif
   if (mutexes == NULL) {
     throw TTransportException(TTransportException::INTERNAL_ERROR,
                               "initializeOpenSSL() failed, "
@@ -151,8 +156,10 @@ static char uppercase(char c);
 SSLContext::SSLContext(const SSLProtocol& protocol) {
   if (protocol == SSLTLS) {
     ctx_ = SSL_CTX_new(SSLv23_method());
+#ifndef OPENSSL_NO_SSL3
   } else if (protocol == SSLv3) {
     ctx_ = SSL_CTX_new(SSLv3_method());
+#endif
   } else if (protocol == TLSv1_0) {
     ctx_ = SSL_CTX_new(TLSv1_method());
   } else if (protocol == TLSv1_1) {
@@ -257,7 +264,7 @@ bool TSSLSocket::peek() {
       switch (error) {
         case SSL_ERROR_SYSCALL:
           if ((errno_copy != THRIFT_EINTR)
-              || (errno_copy != THRIFT_EAGAIN)) {
+              && (errno_copy != THRIFT_EAGAIN)) {
             break;
           }
         case SSL_ERROR_WANT_READ:
@@ -286,33 +293,41 @@ void TSSLSocket::open() {
 
 void TSSLSocket::close() {
   if (ssl_ != NULL) {
-    int rc;
+    try {
+      int rc;
 
-    do {
-      rc = SSL_shutdown(ssl_);
-      if (rc <= 0) {
-        int errno_copy = THRIFT_GET_SOCKET_ERROR;
-        int error = SSL_get_error(ssl_, rc);
-        switch (error) {
-          case SSL_ERROR_SYSCALL:
-            if ((errno_copy != THRIFT_EINTR)
-                || (errno_copy != THRIFT_EAGAIN)) {
-              break;
-            }
-          case SSL_ERROR_WANT_READ:
-          case SSL_ERROR_WANT_WRITE:
-            waitForEvent(error == SSL_ERROR_WANT_READ);
-                rc = 2;
-          default:;// do nothing
+      do {
+        rc = SSL_shutdown(ssl_);
+        if (rc <= 0) {
+          int errno_copy = THRIFT_GET_SOCKET_ERROR;
+          int error = SSL_get_error(ssl_, rc);
+          switch (error) {
+            case SSL_ERROR_SYSCALL:
+              if ((errno_copy != THRIFT_EINTR)
+                  && (errno_copy != THRIFT_EAGAIN)) {
+                break;
+              }
+            case SSL_ERROR_WANT_READ:
+            case SSL_ERROR_WANT_WRITE:
+              waitForEvent(error == SSL_ERROR_WANT_READ);
+              rc = 2;
+            default:;// do nothing
+          }
         }
-      }
-    } while (rc == 2);
+      } while (rc == 2);
 
-    if (rc < 0) {
-      int errno_copy = THRIFT_GET_SOCKET_ERROR;
-      string errors;
-      buildErrors(errors, errno_copy);
-      GlobalOutput(("SSL_shutdown: " + errors).c_str());
+      if (rc < 0) {
+        int errno_copy = THRIFT_GET_SOCKET_ERROR;
+        string errors;
+        buildErrors(errors, errno_copy);
+        GlobalOutput(("SSL_shutdown: " + errors).c_str());
+      }
+    } catch (TTransportException& te) {
+      // Don't emit an exception because this method is called by the
+      // destructor. There's also not much that a user can do to recover, so
+      // just clean up as much as possible without throwing, similar to the rc
+      // < 0 case above.
+      GlobalOutput.printf("SSL_shutdown: %s", te.what());
     }
     SSL_free(ssl_);
     ssl_ = NULL;
@@ -334,7 +349,7 @@ uint32_t TSSLSocket::read(uint8_t* buf, uint32_t len) {
     switch (error) {
       case SSL_ERROR_SYSCALL:
         if ((errno_copy != THRIFT_EINTR)
-            || (errno_copy != THRIFT_EAGAIN)) {
+            && (errno_copy != THRIFT_EAGAIN)) {
               break;
         }
         if (retries++ >= maxRecvRetries_) {
@@ -376,7 +391,7 @@ void TSSLSocket::write(const uint8_t* buf, uint32_t len) {
       switch (error) {
         case SSL_ERROR_SYSCALL:
           if ((errno_copy != THRIFT_EINTR)
-              || (errno_copy != THRIFT_EAGAIN)) {
+              && (errno_copy != THRIFT_EAGAIN)) {
             break;
           }
         case SSL_ERROR_WANT_READ:
@@ -457,7 +472,7 @@ void TSSLSocket::checkHandshake() {
         switch (error) {
           case SSL_ERROR_SYSCALL:
             if ((errno_copy != THRIFT_EINTR)
-                || (errno_copy != THRIFT_EAGAIN)) {
+                && (errno_copy != THRIFT_EAGAIN)) {
               break;
             }
           case SSL_ERROR_WANT_READ:
@@ -469,6 +484,8 @@ void TSSLSocket::checkHandshake() {
       }
     } while (rc == 2);
   } else {
+    // set the SNI hostname
+    SSL_set_tlsext_host_name(ssl_, getHost().c_str());
     do {
       rc = SSL_connect(ssl_);
       if (rc <= 0) {
@@ -477,7 +494,7 @@ void TSSLSocket::checkHandshake() {
         switch (error) {
           case SSL_ERROR_SYSCALL:
             if ((errno_copy != THRIFT_EINTR)
-                || (errno_copy != THRIFT_EAGAIN)) {
+                && (errno_copy != THRIFT_EAGAIN)) {
               break;
             }
           case SSL_ERROR_WANT_READ:
@@ -633,7 +650,15 @@ unsigned int TSSLSocket::waitForEvent(bool wantRead) {
     fds[1].events = THRIFT_POLLIN;
   }
 
-  int ret = THRIFT_POLL(fds, interruptListener_ ? 2 : 1, -1);
+  int timeout = -1;
+  if (wantRead && recvTimeout_) {
+    timeout = recvTimeout_;
+  }
+  if (!wantRead && sendTimeout_) {
+    timeout = sendTimeout_;
+  }
+
+  int ret = THRIFT_POLL(fds, interruptListener_ ? 2 : 1, timeout);
 
   if (ret < 0) {
     // error cases

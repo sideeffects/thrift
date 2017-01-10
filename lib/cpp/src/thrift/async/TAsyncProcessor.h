@@ -34,8 +34,6 @@ namespace async {
  * the call to process returns.  Instead, it calls a cob to signal completion.
  */
 
-class TEventServer; // forward declaration
-
 class TAsyncProcessor {
 public:
   virtual ~TAsyncProcessor() {}
@@ -49,23 +47,16 @@ public:
     return process(_return, io, io);
   }
 
-  boost::shared_ptr<TProcessorEventHandler> getEventHandler() { return eventHandler_; }
+  boost::shared_ptr<TProcessorEventHandler> getEventHandler() const { return eventHandler_; }
 
   void setEventHandler(boost::shared_ptr<TProcessorEventHandler> eventHandler) {
     eventHandler_ = eventHandler;
   }
 
-  const TEventServer* getAsyncServer() { return asyncServer_; }
-
 protected:
   TAsyncProcessor() {}
 
   boost::shared_ptr<TProcessorEventHandler> eventHandler_;
-  const TEventServer* asyncServer_;
-
-private:
-  friend class TEventServer;
-  void setAsyncServer(const TEventServer* server) { asyncServer_ = server; }
 };
 
 class TAsyncProcessorFactory {
