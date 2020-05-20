@@ -118,7 +118,8 @@ CMAKE_DEPENDENT_OPTION(BUILD_HASKELL "Build GHC library" ON
 # Common library options
 # https://cmake.org/cmake/help/latest/variable/BUILD_SHARED_LIBS.html
 # Default on Windows is static, shared mode library support needs work...
-CMAKE_DEPENDENT_OPTION(BUILD_SHARED_LIBS "Build shared libraries" OFF "WIN32" ON)
+#CMAKE_DEPENDENT_OPTION(BUILD_SHARED_LIBS "Build shared libraries" OFF "WIN32" ON)
+option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 
 if (WITH_SHARED_LIB)
     message(WARNING "WITH_SHARED_LIB is deprecated; use -DBUILD_SHARED_LIBS=ON instead")
