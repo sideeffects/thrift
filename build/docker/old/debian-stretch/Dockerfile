@@ -102,7 +102,7 @@ ENV PATH /usr/lib/dart/bin:$PATH
 # project isn't ready for this quite yet:
 # RUN apt-get install -y --no-install-recommends \
 # `# dotnet core dependencies` \
-#       dotnet-sdk-2.0.0
+#       dotnet-sdk-5.0
 
 RUN apt-get install -y --no-install-recommends \
 `# Erlang dependencies` \
@@ -119,11 +119,6 @@ RUN apt-get install -y --no-install-recommends \
 RUN apt-get install -y --no-install-recommends \
 `# golang (go) dependencies` \
       golang-go
-
-RUN apt-get install -y --no-install-recommends \
-`# Haskell dependencies` \
-      ghc \
-      cabal-install
 
 RUN apt-get install -y --no-install-recommends \
 `# Haxe dependencies` \

@@ -20,8 +20,6 @@
 #ifndef _THRIFT_TRANSPORT_TWEBSOCKETSERVER_H_
 #define _THRIFT_TRANSPORT_TWEBSOCKETSERVER_H_ 1
 
-#include <thrift/portable_endian.h>
-
 #include <cstdlib>
 #include <iostream>
 #include <sstream>
@@ -29,6 +27,7 @@
 #include <openssl/sha.h>
 
 #include <thrift/config.h>
+#include <thrift/protocol/TProtocol.h>
 #include <thrift/transport/TSocket.h>
 #include <thrift/transport/THttpServer.h>
 #if defined(_MSC_VER) || defined(__MINGW32__)
@@ -54,8 +53,8 @@ std::string base64Encode(unsigned char* data, int length);
 template <bool binary>
 class TWebSocketServer : public THttpServer {
 public:
-  TWebSocketServer(std::shared_ptr<TTransport> transport)
-    : THttpServer(transport) {
+  TWebSocketServer(std::shared_ptr<TTransport> transport, std::shared_ptr<TConfiguration> config = nullptr)
+    : THttpServer(transport, config) {
       resetHandshake();
   }
 
@@ -99,6 +98,7 @@ public:
   }
 
   void flush() override {
+    resetConsumedMessageSize();
     writeFrameHeader();
     uint8_t* buffer;
     uint32_t length;
@@ -200,7 +200,7 @@ private:
 
   void failConnection(CloseCode reason) {
     writeFrameHeader(Opcode::Close);
-    auto buffer = htobe16(static_cast<uint16_t>(reason));
+    auto buffer = htons(static_cast<uint16_t>(reason));
     transport_->write(reinterpret_cast<const uint8_t*>(&buffer), 2);
     transport_->flush();
     transport_->close();
@@ -255,13 +255,13 @@ private:
       if (read < 2) {
         return false;
       }
-      payloadLength = be16toh(*reinterpret_cast<uint16_t*>(headerBuffer));
+      payloadLength = ntohs(*reinterpret_cast<uint16_t*>(headerBuffer));
     } else if (payloadLength == 127) {
       read = transport_->read(headerBuffer, 8);
       if (read < 8) {
         return false;
       }
-      payloadLength = be64toh(*reinterpret_cast<uint64_t*>(headerBuffer));
+      payloadLength = THRIFT_ntohll(*reinterpret_cast<uint64_t*>(headerBuffer));
       if ((payloadLength & 0x8000000000000000) != 0) {
         failConnection(CloseCode::ProtocolError);
         throw TTransportException(
@@ -307,7 +307,7 @@ private:
       if (length >= 2) {
         uint8_t buffer[2];
         readBuffer_.read(buffer, 2);
-        CloseCode closeCode = static_cast<CloseCode>(be16toh(*reinterpret_cast<uint16_t*>(buffer)));
+        CloseCode closeCode = static_cast<CloseCode>(ntohs(*reinterpret_cast<uint16_t*>(buffer)));
         THRIFT_UNUSED_VARIABLE(closeCode);
         string closeReason = readBuffer_.readAsString(length - 2);
         T_DEBUG("Connection closed: %d %s", closeCode, closeReason);
@@ -359,10 +359,10 @@ private:
       header[1] = static_cast<uint8_t>(length);
     } else if (length < 65536) {
       header[1] = 126;
-      *reinterpret_cast<uint16_t*>(header + 2) = htobe16(length);
+      *reinterpret_cast<uint16_t*>(header + 2) = htons(length);
     } else {
       header[1] = 127;
-      *reinterpret_cast<uint64_t*>(header + 2) = htobe64(length);
+      *reinterpret_cast<uint64_t*>(header + 2) = THRIFT_htonll(length);
     }
 
     transport_->write(header, headerSize);

@@ -45,6 +45,9 @@ using std::vector;
 
 static const string endl = "\n"; // avoid ostream << std::endl flushes
 
+static const string DEEP_COPY_METHOD_NAME = "DeepCopy";
+static const string CANCELLATION_TOKEN_NAME = "cancellationToken";
+
 class t_netstd_generator : public t_oop_generator
 {
 
@@ -60,7 +63,6 @@ public:
   t_netstd_generator(t_program* program, const map<string, string>& parsed_options, const string& option_string);
 
   bool is_wcf_enabled() const;
-  bool is_nullable_enabled() const;
   bool is_hashcode_enabled() const;
   bool is_serialize_enabled() const;
   bool is_union_enabled() const;
@@ -78,6 +80,9 @@ public:
   void generate_xception(t_struct* txception);
   void generate_service(t_service* tservice);
 
+  // additional files
+  void generate_extensions_file();
+
   void generate_property(ostream& out, t_field* tfield, bool isPublic, bool generateIsset);
   void generate_netstd_property(ostream& out, t_field* tfield, bool isPublic, bool includeIsset = true, string fieldPrefix = "");
   bool print_const_value(ostream& out, string name, t_type* type, t_const_value* value, bool in_static, bool defval = false, bool needtype = false);
@@ -90,6 +95,7 @@ public:
   void generate_netstd_union_definition(ostream& out, t_struct* tunion);
   void generate_netstd_union_class(ostream& out, t_struct* tunion, t_field* tfield);
   void generate_netstd_wcffault(ostream& out, t_struct* tstruct);
+  void generate_netstd_deepcopy_method(ostream& out, t_struct* tstruct, std::string sharp_struct_name);
   void generate_netstd_struct_reader(ostream& out, t_struct* tstruct);
   void generate_netstd_struct_result_writer(ostream& out, t_struct* tstruct);
   void generate_netstd_struct_writer(ostream& out, t_struct* tstruct);
@@ -126,14 +132,20 @@ public:
   string netstd_type_usings() const;
   string netstd_thrift_usings() const;
 
-  string type_name(t_type* ttype);
+  static const int MODE_FULL_DECL = 0x00;
+  static const int MODE_NO_RETURN = 0x01;
+  static const int MODE_NO_ARGS   = 0x02;
+
+  string type_name(t_type* ttype, bool with_namespace = true);
   string base_type_name(t_base_type* tbase);
   string declare_field(t_field* tfield, bool init = false, string prefix = "");
-  string function_signature_async(t_function* tfunction, string prefix = "");
+  string function_signature_async(t_function* tfunction, string prefix = "", int mode = MODE_FULL_DECL);
   string function_signature(t_function* tfunction, string prefix = "");
-  string argument_list(t_struct* tstruct);
+  string argument_list(t_struct* tstruct, bool with_types = true);
   string type_to_enum(t_type* ttype);
   string prop_name(t_field* tfield, bool suppress_mapping = false);
+  string func_name(t_function* tfunc, bool suppress_mapping = false);
+  string func_name(std::string fname, bool suppress_mapping = false);
   string convert_to_pascal_case(const string& str);
   string get_enum_class_name(t_type* type);
 
@@ -141,23 +153,36 @@ private:
   string namespace_name_;
   string namespace_dir_;
 
-  bool nullable_;
   bool union_;
   bool hashcode_;
   bool serialize_;
   bool wcf_;
   bool use_pascal_case_properties;
+  bool suppress_deepcopy;
+  bool add_async_postfix;
 
   string wcf_namespace_;
   map<string, int> netstd_keywords;
   vector<member_mapping_scope> member_mapping_scopes;
-
+  map<string, t_type*> collected_extension_types;
+  map<string, t_type*> checked_extension_types;
+  
   void init_keywords();
-  string normalize_name(string name);
+  string normalize_name(string name, bool is_arg_name = false);
   string make_valid_csharp_identifier(string const& fromName);
+  string make_csharp_string_literal( string const& value);
+  void prepare_member_name_mapping(t_service* tservice);
   void prepare_member_name_mapping(t_struct* tstruct);
-  void prepare_member_name_mapping(void* scope, const vector<t_field*>& members, const string& structname);
+  void prepare_member_name_mapping(t_struct* scope, const vector<t_field*>& members, const string& structname);
+  void prepare_member_name_mapping(t_service* scope, const vector<t_function*>& members, const string& structname);
   void cleanup_member_name_mapping(void* scope);
   string get_mapped_member_name(string oldname);
+  string get_isset_name(const string& str);
+  string get_deep_copy_method_call(t_type* ttype, bool& needs_typecast);
+  void collect_extensions_types(t_struct* tstruct);
+  void collect_extensions_types(t_type* ttype);
+  void generate_extensions(ostream& out, map<string, t_type*> types);
   void reset_indent();
+  void generate_null_check_begin(ostream& out, t_field* tfield);
+  void generate_null_check_end(ostream& out, t_field* tfield);
 };

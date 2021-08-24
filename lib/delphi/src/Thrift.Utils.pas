@@ -80,6 +80,8 @@ type
   public
     class function IsHighSurrogate( const c : Char) : Boolean; static; inline;
     class function IsLowSurrogate( const c : Char) : Boolean; static; inline;
+
+    class function IsHtmlDoctype( const fourBytes : Integer) : Boolean; static;
   end;
 
   EnumUtils<T> = class sealed
@@ -259,6 +261,30 @@ begin
 end;
 
 
+class function CharUtils.IsHtmlDoctype( const fourBytes : Integer) : Boolean;
+var pc : PAnsiChar;
+const HTML_BEGIN : PAnsiChar = 'OD!<';  // first 4 bytes of '<!DOCTYPE ' in LE byte order
+begin
+  pc := @fourBytes;
+
+  if UpCase(pc^) <> HTML_BEGIN[0]
+  then Exit(FALSE);
+
+  Inc( pc);
+  if UpCase(pc^) <> HTML_BEGIN[1]
+  then Exit(FALSE);
+
+
+  Inc( pc);
+  if UpCase(pc^) <> HTML_BEGIN[2]
+  then Exit(FALSE);
+
+  Inc( pc);
+  result := (UpCase(pc^) = HTML_BEGIN[3]);
+end;
+
+
+
 {$IFDEF Win64}
 
 function InterlockedCompareExchange64( var Target : Int64; Exchange, Comparand : Int64) : Int64;  inline;
@@ -313,6 +339,7 @@ begin
   pType := PTypeInfo(TypeInfo(T));
   if Assigned(pType) then begin
     case pType^.Kind of
+
       tkInterface : begin
         pIntf := PInterface(@value);
         if Supports( pIntf^, ISupportsToString, stos) then begin
@@ -320,6 +347,17 @@ begin
           Exit;
         end;
       end;
+
+      tkEnumeration : begin
+        case SizeOf(value) of
+          1 : begin result := EnumUtils<T>.ToString( PShortInt(@value)^);  Exit; end;
+          2 : begin result := EnumUtils<T>.ToString( PSmallInt(@value)^);  Exit; end;
+          4 : begin result := EnumUtils<T>.ToString( PLongInt(@value)^);  Exit; end;
+        else
+          ASSERT(FALSE); // in theory, this should not happen
+        end;
+      end;
+
     end;
   end;
 

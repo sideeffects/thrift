@@ -24,9 +24,10 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
-	"gen/thrifttest"
 	"net/http"
-	"thrift"
+
+	"github.com/apache/thrift/lib/go/thrift"
+	"github.com/apache/thrift/test/go/src/gen/thrifttest"
 )
 
 var debugClientProtocol bool
@@ -61,15 +62,17 @@ func StartClient(
 		return nil, nil, fmt.Errorf("Invalid protocol specified %s", protocol)
 	}
 	if debugClientProtocol {
-		protocolFactory = thrift.NewTDebugProtocolFactory(protocolFactory, "client:")
+		protocolFactory = thrift.NewTDebugProtocolFactoryWithLogger(protocolFactory, "client:", thrift.StdLogger(nil))
 	}
 	if ssl {
-		trans, err = thrift.NewTSSLSocket(hostPort, &tls.Config{InsecureSkipVerify: true})
+		trans, err = thrift.NewTSSLSocketConf(hostPort, &thrift.TConfiguration{
+			TLSConfig: &tls.Config{InsecureSkipVerify: true},
+		})
 	} else {
 		if domain_socket != "" {
-			trans, err = thrift.NewTSocket(domain_socket)
+			trans = thrift.NewTSocketConf(domain_socket, nil)
 		} else {
-			trans, err = thrift.NewTSocket(hostPort)
+			trans = thrift.NewTSocketConf(hostPort, nil)
 		}
 	}
 	if err != nil {

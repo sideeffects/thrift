@@ -30,7 +30,7 @@ public final class StringUtils {
   /**
    * Stringify a byte array to the hex representation for each byte.
    *
-   * @param bytes
+   * @param bytes the byte array to convert to hex string.
    * @return hex string.
    */
   public static String bytesToHexString(byte[] bytes) {
@@ -54,6 +54,9 @@ public final class StringUtils {
     }
     if (offset < 0) {
       throw new IndexOutOfBoundsException("Negative start offset " + offset);
+    }
+    if (length > bytes.length - offset) {
+      throw new IndexOutOfBoundsException("Invalid range, bytes.length: " + bytes.length + " offset: " + offset + " length: " + length);
     }
     char[] chars = new char[length * 2];
     for (int i = 0; i < length; i++) {

@@ -1,4 +1,4 @@
-Thrift Binary protocol encoding 
+Thrift Binary protocol encoding
 ===============================
 
 <!--
@@ -24,10 +24,10 @@ under the License.
 --------------------------------------------------------------------
 -->
 
-This documents describes the wire encoding for RPC using the older Thrift *binary protocol*.
+This document describes the wire encoding for RPC using the older Thrift *binary protocol*.
 
 The information here is _mostly_ based on the Java implementation in the Apache thrift library (version 0.9.1 and
-0.9.3). Other implementation however, should behave the same.
+0.9.3). Other implementation, however, should behave the same.
 
 For background on Thrift see the [Thrift whitepaper (pdf)](https://thrift.apache.org/static/files/thrift-20070401.pdf).
 
@@ -150,7 +150,7 @@ determine how to decode the field value.
 Note that the field name is not encoded so field renames in the IDL do not affect forward and backward compatibility.
 
 The default Java implementation (Apache Thrift 0.9.1) has undefined behavior when it tries to decode a field that has
-another field-type then what is expected. Theoretically this could be detected at the cost of some additional checking.
+another field-type than what is expected. Theoretically, this could be detected at the cost of some additional checking.
 Other implementation may perform this check and then either ignore the field, or return a protocol exception.
 
 A *Union* is encoded exactly the same as a struct with the additional restriction that at most 1 field may be encoded.
@@ -182,12 +182,12 @@ Where:
 The following field-types are used:
 
 * `BOOL`, encoded as `2`
-* `BYTE`, encoded as `3`
+* `I8`, encoded as `3`
 * `DOUBLE`, encoded as `4`
 * `I16`, encoded as `6`
 * `I32`, encoded as `8`
 * `I64`, encoded as `10`
-* `STRING`, used for binary and string fields, encoded as `11`
+* `BINARY`, used for binary and string fields, encoded as `11`
 * `STRUCT`, used for structs and union fields, encoded as `12`
 * `MAP`, encoded as `13`
 * `SET`, encoded as `14`
@@ -213,7 +213,7 @@ Where:
 
 The element-type values are the same as field-types. The full list is included in the struct section above.
 
-The maximum list/set size is configurable. By default there is no limit (meaning the limit is the maximum int32 value:
+The maximum list/set size is configurable. By default, there is no limit (meaning the limit is the maximum int32 value:
 2147483647).
 
 ## Map

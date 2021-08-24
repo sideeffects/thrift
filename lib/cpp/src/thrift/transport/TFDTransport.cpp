@@ -46,12 +46,17 @@ void TFDTransport::close() {
   int errno_copy = THRIFT_ERRNO;
   fd_ = -1;
   // Have to check uncaught_exception because this is called in the destructor.
+#ifdef __cpp_lib_uncaught_exceptions
+  if (rv < 0 && !std::uncaught_exceptions()) {
+#else
   if (rv < 0 && !std::uncaught_exception()) {
+#endif
     throw TTransportException(TTransportException::UNKNOWN, "TFDTransport::close()", errno_copy);
   }
 }
 
 uint32_t TFDTransport::read(uint8_t* buf, uint32_t len) {
+  checkReadBytesAvailable(len);
   unsigned int maxRetries = 5; // same as the TSocket default
   unsigned int retries = 0;
   while (true) {

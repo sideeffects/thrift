@@ -21,17 +21,36 @@ specific language governing permissions and limitations
 under the License.
 
 
+Suppored Go releases
+====================
+
+Following the
+[official Go release policy](https://golang.org/doc/devel/release#policy),
+we support the latest two Go releases at the time of the Thrift release.
+
+For example, at the time of Thrift v0.14.0 release,
+the latest two Go releases are go1.15 and go1.14,
+and those are the two Go releases supported by Thrift v0.14.*
+(including v0.14.1 and v0.14.2 patch releases).
+
+Because of Go's backward compatibility guarantee,
+older Thrift libraries usually works with newer Go releases
+(e.g. Thrift v0.14.* works with go1.16, although it's not officially supported),
+but newer Thrift releases might use new APIs introduced in Go releases and no
+longer work with older Go releases.
+For example, Thrift v0.14.0 used APIs introduced in go1.13,
+and as a result no longer works on go1.12.
+
+
 Using Thrift with Go
 ====================
 
-Thrift supports Go 1.7+
+Thrift supports the currently officially supported Go releases (the latest 2).
 
-In following Go conventions, we recommend you use the 'go' tool to install
-Thrift for go.
+After initializing the go modules file in your project, use the following
+command to add the most recent version of the package:
 
-    $ go get github.com/apache/thrift/lib/go/thrift/...
-
-Will retrieve and install the most recent version of the package.
+    $ go get github.com/apache/thrift
 
 
 A note about optional fields
@@ -81,3 +100,35 @@ which will generate:
     type Foo struct {
       Bar string `thrift:"bar,1,required" some_tag:"some_tag_value"`
     }
+
+A note about server handler implementations
+===========================================
+
+The context object passed into the server handler function will be canceled when
+the client closes the connection (this is a best effort check, not a guarantee
+-- there's no guarantee that the context object is always canceled when client
+closes the connection, but when it's canceled you can always assume the client
+closed the connection). When implementing Go Thrift server, you can take
+advantage of that to abandon requests that's no longer needed:
+
+    func MyEndpoint(ctx context.Context, req *thriftRequestType) (*thriftResponseType, error) {
+        ...
+        if ctx.Err() == context.Canceled {
+            return nil, thrift.ErrAbandonRequest
+        }
+        ...
+    }
+
+This feature would add roughly 1 millisecond of latency overhead to the server
+handlers (along with roughly 2 goroutines per request).
+If that is unacceptable, it can be disabled by having this line early in your
+main function:
+
+    thrift.ServerConnectivityCheckInterval = 0
+
+Please be advised that due to a
+[Go runtime bug](https://github.com/golang/go/issues/27707), currently
+if this interval is set to a value too low (for example, 1ms), it might cause
+excessive cpu overhead.
+
+This feature is also only enabled on non-oneway endpoints.

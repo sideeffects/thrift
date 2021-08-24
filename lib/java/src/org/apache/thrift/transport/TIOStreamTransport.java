@@ -19,12 +19,14 @@
 
 package org.apache.thrift.transport;
 
+import org.apache.thrift.TConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.SocketTimeoutException;
 
 /**
  * This is the most commonly used base transport. It takes an InputStream or
@@ -33,7 +35,7 @@ import java.io.OutputStream;
  * has to provide a variety of types of streams.
  *
  */
-public class TIOStreamTransport extends TTransport {
+public class TIOStreamTransport extends TEndpointTransport {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(TIOStreamTransport.class.getName());
 
@@ -47,15 +49,47 @@ public class TIOStreamTransport extends TTransport {
    * Subclasses can invoke the default constructor and then assign the input
    * streams in the open method.
    */
-  protected TIOStreamTransport() {}
+  protected TIOStreamTransport(TConfiguration config) throws TTransportException {
+    super(config);
+  }
 
+  /**
+   * Subclasses can invoke the default constructor and then assign the input
+   * streams in the open method.
+   */
+  protected TIOStreamTransport() throws TTransportException {
+    super(new TConfiguration());
+  }
+
+  /**
+   * Input stream constructor, constructs an input only transport.
+   *
+   * @param config
+   * @param is Input stream to read from
+   */
+  public TIOStreamTransport(TConfiguration config, InputStream is) throws TTransportException {
+    super(config);
+    inputStream_ = is;
+  }
   /**
    * Input stream constructor, constructs an input only transport.
    *
    * @param is Input stream to read from
    */
-  public TIOStreamTransport(InputStream is) {
+  public TIOStreamTransport(InputStream is) throws TTransportException {
+    super(new TConfiguration());
     inputStream_ = is;
+  }
+
+  /**
+   * Output stream constructor, constructs an output only transport.
+   *
+   * @param config
+   * @param os Output stream to write to
+   */
+  public TIOStreamTransport(TConfiguration config, OutputStream os) throws TTransportException {
+    super(config);
+    outputStream_ = os;
   }
 
   /**
@@ -63,7 +97,21 @@ public class TIOStreamTransport extends TTransport {
    *
    * @param os Output stream to write to
    */
-  public TIOStreamTransport(OutputStream os) {
+  public TIOStreamTransport(OutputStream os) throws TTransportException {
+    super(new TConfiguration());
+    outputStream_ = os;
+  }
+
+  /**
+   * Two-way stream constructor.
+   *
+   * @param config
+   * @param is Input stream to read from
+   * @param os Output stream to read from
+   */
+  public TIOStreamTransport(TConfiguration config, InputStream is, OutputStream os) throws TTransportException {
+    super(config);
+    inputStream_ = is;
     outputStream_ = os;
   }
 
@@ -73,7 +121,8 @@ public class TIOStreamTransport extends TTransport {
    * @param is Input stream to read from
    * @param os Output stream to read from
    */
-  public TIOStreamTransport(InputStream is, OutputStream os) {
+  public TIOStreamTransport(InputStream is, OutputStream os) throws TTransportException {
+    super(new TConfiguration());
     inputStream_ = is;
     outputStream_ = os;
   }
@@ -126,6 +175,8 @@ public class TIOStreamTransport extends TTransport {
     int bytesRead;
     try {
       bytesRead = inputStream_.read(buf, off, len);
+    } catch (SocketTimeoutException ste) {
+      throw new TTransportException(TTransportException.TIMED_OUT, ste);
     } catch (IOException iox) {
       throw new TTransportException(TTransportException.UNKNOWN, iox);
     }
@@ -158,6 +209,9 @@ public class TIOStreamTransport extends TTransport {
     }
     try {
       outputStream_.flush();
+
+      resetConsumedMessageSize(-1);
+
     } catch (IOException iox) {
       throw new TTransportException(TTransportException.UNKNOWN, iox);
     }

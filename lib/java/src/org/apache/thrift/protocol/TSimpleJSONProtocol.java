@@ -25,6 +25,7 @@ import java.util.Stack;
 
 import org.apache.thrift.TException;
 import org.apache.thrift.transport.TTransport;
+import org.apache.thrift.transport.TTransportException;
 
 /**
  * JSON protocol implementation for thrift.
@@ -307,7 +308,7 @@ public class TSimpleJSONProtocol extends TProtocol {
   public void writeString(String str) throws TException {
     writeContext_.write();
     int length = str.length();
-    StringBuffer escape = new StringBuffer(length + 16);
+    StringBuilder escape = new StringBuilder(length + 16);
     escape.append(QUOTE);
     for (int i = 0; i < length; ++i) {
       char c = str.charAt(i);
@@ -367,117 +368,137 @@ public class TSimpleJSONProtocol extends TProtocol {
 
   /**
    * Reading methods.
+   *
+   * simplejson is not meant to be read back into thrift
+   * - see http://wiki.apache.org/thrift/ThriftUsageJava
+   * - use JSON instead
    */
 
   @Override
   public TMessage readMessageBegin() throws TException {
-    // TODO(mcslee): implement
-    return EMPTY_MESSAGE;
+    throw new TException("Not implemented");
   }
 
   @Override
-  public void readMessageEnd() throws TException {}
+  public void readMessageEnd() throws TException {
+    throw new TException("Not implemented");}
 
   @Override
   public TStruct readStructBegin() throws TException {
-    // TODO(mcslee): implement
-    return ANONYMOUS_STRUCT;
+    throw new TException("Not implemented");
   }
 
   @Override
-  public void readStructEnd() throws TException {}
+  public void readStructEnd() throws TException {
+    throw new TException("Not implemented");}
 
   @Override
   public TField readFieldBegin() throws TException {
-    // TODO(mcslee): implement
-    return ANONYMOUS_FIELD;
+    throw new TException("Not implemented");
   }
 
   @Override
-  public void readFieldEnd() throws TException {}
+  public void readFieldEnd() throws TException {
+    throw new TException("Not implemented");}
 
   @Override
   public TMap readMapBegin() throws TException {
-    // TODO(mcslee): implement
-    return EMPTY_MAP;
+    throw new TException("Not implemented");
   }
 
   @Override
-  public void readMapEnd() throws TException {}
+  public void readMapEnd() throws TException {
+    throw new TException("Not implemented");}
 
   @Override
   public TList readListBegin() throws TException {
-    // TODO(mcslee): implement
-    return EMPTY_LIST;
+    throw new TException("Not implemented");
   }
 
   @Override
-  public void readListEnd() throws TException {}
+  public void readListEnd() throws TException {
+    throw new TException("Not implemented");}
 
   @Override
   public TSet readSetBegin() throws TException {
-    // TODO(mcslee): implement
-    return EMPTY_SET;
+    throw new TException("Not implemented");
   }
 
   @Override
-  public void readSetEnd() throws TException {}
+  public void readSetEnd() throws TException {
+    throw new TException("Not implemented");}
 
   @Override
   public boolean readBool() throws TException {
-    return (readByte() == 1);
+    throw new TException("Not implemented");
   }
 
   @Override
   public byte readByte() throws TException {
-    // TODO(mcslee): implement
-    return 0;
+    throw new TException("Not implemented");
   }
 
   @Override
   public short readI16() throws TException {
-    // TODO(mcslee): implement
-    return 0;
+    throw new TException("Not implemented");
   }
 
   @Override
   public int readI32() throws TException {
-    // TODO(mcslee): implement
-    return 0;
+    throw new TException("Not implemented");
   }
 
   @Override
   public long readI64() throws TException {
-    // TODO(mcslee): implement
-    return 0;
+    throw new TException("Not implemented");
   }
 
   @Override
   public double readDouble() throws TException {
-    // TODO(mcslee): implement
-    return 0;
+    throw new TException("Not implemented");
   }
 
   @Override
   public String readString() throws TException {
-    // TODO(mcslee): implement
-    return "";
+    throw new TException("Not implemented");
   }
 
   public String readStringBody(int size) throws TException {
-    // TODO(mcslee): implement
-    return "";
+    throw new TException("Not implemented");
   }
 
   @Override
   public ByteBuffer readBinary() throws TException {
-    // TODO(mcslee): implement
-    return ByteBuffer.wrap(new byte[0]);
+    throw new TException("Not implemented");
   }
 
   public static class CollectionMapKeyException extends TException {
     public CollectionMapKeyException(String message) {
       super(message);
+    }
+  }
+
+  /**
+   *
+   * Return the minimum number of bytes a type will consume on the wire
+   */
+  public int getMinSerializedSize(byte type) throws TException {
+    switch (type)
+    {
+      case 0: return 0; // Stop
+      case 1: return 0; // Void
+      case 2: return 1; // Bool
+      case 3: return 1; // Byte
+      case 4: return 1; // Double
+      case 6: return 1; // I16
+      case 8: return 1; // I32
+      case 10: return 1;// I64
+      case 11: return 2;  // string length
+      case 12: return 2;  // empty struct
+      case 13: return 2;  // element count Map
+      case 14: return 2;  // element count Set
+      case 15: return 2;  // element count List
+      default: throw new TTransportException(TTransportException.UNKNOWN, "unrecognized type code");
     }
   }
 }

@@ -75,10 +75,9 @@ import java.util.concurrent.TimeoutException;
  *
  */
 public class TNonblockingMultiFetchClient {
-  
+
   private static final Logger LOGGER = LoggerFactory.getLogger(
-    TNonblockingMultiFetchClient.class.getName()
-  );
+    TNonblockingMultiFetchClient.class);
 
   // if the size of the response msg exceeds this limit (in byte), we will
   // not read the msg
@@ -87,7 +86,7 @@ public class TNonblockingMultiFetchClient {
   // time limit for fetching data from all servers (in second)
   private int fetchTimeoutSeconds;
 
-  // store request that will be sent to servers  
+  // store request that will be sent to servers
   private ByteBuffer requestBuf;
   private ByteBuffer requestBufDuplication;
 
@@ -105,7 +104,7 @@ public class TNonblockingMultiFetchClient {
     this.fetchTimeoutSeconds = fetchTimeoutSeconds;
     this.requestBuf = requestBuf;
     this.servers = servers;
-      
+
     stats = new TNonblockingMultiFetchStats();
     recvBuf = null;
   }
@@ -119,8 +118,9 @@ public class TNonblockingMultiFetchClient {
   }
 
   /**
-   * return a duplication of requestBuf, so that requestBuf will not
-   * be modified by others.
+   * Returns a copy of requestBuf, so that requestBuf will not be modified by others.
+   *
+   * @return a copy of requestBuf.
    */
   public synchronized ByteBuffer getRequestBuf() {
     if (requestBuf == null) {
@@ -129,7 +129,7 @@ public class TNonblockingMultiFetchClient {
       if (requestBufDuplication == null) {
         requestBufDuplication = requestBuf.duplicate();
       }
-      return requestBufDuplication;  
+      return requestBufDuplication;
     }
   }
 
@@ -145,7 +145,9 @@ public class TNonblockingMultiFetchClient {
   }
 
   /**
-   * main entry function for fetching from servers
+   * Main entry function for fetching from servers.
+   *
+   * @return The fetched data.
    */
   public synchronized ByteBuffer[] fetch() {
     // clear previous results
@@ -163,18 +165,18 @@ public class TNonblockingMultiFetchClient {
     executor.execute(task);
     try {
       task.get(fetchTimeoutSeconds, TimeUnit.SECONDS);
-    } catch(InterruptedException ie) {
+    } catch (InterruptedException ie) {
       // attempt to cancel execution of the task.
       task.cancel(true);
-      LOGGER.error("interrupted during fetch: "+ie.toString());
-    } catch(ExecutionException ee) {
+      LOGGER.error("Interrupted during fetch", ie);
+    } catch (ExecutionException ee) {
       // attempt to cancel execution of the task.
       task.cancel(true);
-      LOGGER.error("exception during fetch: "+ee.toString());
-    } catch(TimeoutException te) {
-      // attempt to cancel execution of the task.  
+      LOGGER.error("Exception during fetch", ee);
+    } catch (TimeoutException te) {
+      // attempt to cancel execution of the task.
       task.cancel(true);
-      LOGGER.error("timeout for fetch: "+te.toString());
+      LOGGER.error("Timeout for fetch", te);
     }
 
     executor.shutdownNow();
@@ -208,15 +210,15 @@ public class TNonblockingMultiFetchClient {
       // buffer for receiving response from servers
       recvBuf                     = new ByteBuffer[numTotalServers];
       // buffer for sending request
-      ByteBuffer sendBuf[]        = new ByteBuffer[numTotalServers];
-      long numBytesRead[]         = new long[numTotalServers];
-      int frameSize[]             = new int[numTotalServers];
-      boolean hasReadFrameSize[]  = new boolean[numTotalServers];
+      ByteBuffer[] sendBuf = new ByteBuffer[numTotalServers];
+      long[] numBytesRead = new long[numTotalServers];
+      int[] frameSize = new int[numTotalServers];
+      boolean[] hasReadFrameSize = new boolean[numTotalServers];
 
       try {
         selector = Selector.open();
-      } catch (IOException e) {
-        LOGGER.error("selector opens error: "+e.toString());
+      } catch (IOException ioe) {
+        LOGGER.error("Selector opens error", ioe);
         return;
       }
 
@@ -239,14 +241,13 @@ public class TNonblockingMultiFetchClient {
           // attach index of the key
           key.attach(i);
         } catch (Exception e) {
-          stats.incNumConnectErrorServers();  
-          String err = String.format("set up socket to server %s error: %s",
-            server.toString(), e.toString());
-          LOGGER.error(err);
+          stats.incNumConnectErrorServers();
+          LOGGER.error("Set up socket to server {} error", server, e);
+
           // free resource
           if (s != null) {
             try {s.close();} catch (Exception ex) {}
-          }            
+          }
           if (key != null) {
              key.cancel();
           }
@@ -256,7 +257,7 @@ public class TNonblockingMultiFetchClient {
       // wait for events
       while (stats.getNumReadCompletedServers() +
         stats.getNumConnectErrorServers() < stats.getNumTotalServers()) {
-        // if the thread is interrupted (e.g., task is cancelled)  
+        // if the thread is interrupted (e.g., task is cancelled)
         if (Thread.currentThread().isInterrupted()) {
           return;
         }
@@ -264,7 +265,7 @@ public class TNonblockingMultiFetchClient {
         try{
           selector.select();
         } catch (Exception e) {
-          LOGGER.error("selector selects error: "+e.toString());
+          LOGGER.error("Selector selects error", e);
           continue;
         }
 
@@ -284,10 +285,7 @@ public class TNonblockingMultiFetchClient {
               sChannel.finishConnect();
             } catch (Exception e) {
               stats.incNumConnectErrorServers();
-              String err = String.format("socket %d connects to server %s " +
-                "error: %s",
-                index, servers.get(index).toString(), e.toString());
-              LOGGER.error(err);
+              LOGGER.error("Socket {} connects to server {} error", index, servers.get(index), e);
             }
           }
 
@@ -299,10 +297,7 @@ public class TNonblockingMultiFetchClient {
                 SocketChannel sChannel = (SocketChannel)selKey.channel();
                 sChannel.write(sendBuf[index]);
               } catch (Exception e) {
-                String err = String.format("socket %d writes to server %s " +
-                  "error: %s",
-                  index, servers.get(index).toString(), e.toString());
-                LOGGER.error(err);
+                LOGGER.error("Socket {} writes to server {} error", index, servers.get(index), e);
               }
             }
           }
@@ -325,10 +320,8 @@ public class TNonblockingMultiFetchClient {
 
                   if (frameSize[index] <= 0) {
                     stats.incNumInvalidFrameSize();
-                    String err = String.format("Read an invalid frame size %d"
-                      + " from %s. Does the server use TFramedTransport? ",
-                      frameSize[index], servers.get(index).toString());
-                    LOGGER.error(err);
+                    LOGGER.error("Read an invalid frame size {} from {}. Does the server use TFramedTransport?",
+                        frameSize[index], servers.get(index));
                     sChannel.close();
                     continue;
                   }
@@ -339,11 +332,8 @@ public class TNonblockingMultiFetchClient {
 
                   if (frameSize[index] + 4 > maxRecvBufBytesPerServer) {
                     stats.incNumOverflowedRecvBuf();
-                    String err = String.format("Read frame size %d from %s,"
-                      + " total buffer size would exceed limit %d",
-                      frameSize[index], servers.get(index).toString(),
-                      maxRecvBufBytesPerServer);
-                    LOGGER.error(err);                      
+                    LOGGER.error("Read frame size {} from {}, total buffer size would exceed limit {}",
+                        frameSize[index], servers.get(index), maxRecvBufBytesPerServer);
                     sChannel.close();
                     continue;
                   }
@@ -366,10 +356,8 @@ public class TNonblockingMultiFetchClient {
                 }
               }
             } catch (Exception e) {
-              String err = String.format("socket %d reads from server %s " +
-                "error: %s",
-                index, servers.get(index).toString(), e.toString());
-              LOGGER.error(err);
+              LOGGER.error("Socket {} reads from server {} error",
+                  index, servers.get(index), e);
             }
           }
         }
@@ -392,7 +380,7 @@ public class TNonblockingMultiFetchClient {
           selector.close();
         }
       } catch (IOException e) {
-        LOGGER.error("free resource error: "+e.toString());
+        LOGGER.error("Free resource error", e);
       }
     }
   }

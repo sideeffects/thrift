@@ -23,6 +23,9 @@
 #include <sstream>
 #ifdef HAVE_SYS_IOCTL_H
 #include <sys/ioctl.h>
+#ifdef __sun
+#include <sys/filio.h>
+#endif // __sun
 #endif
 #ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
@@ -47,6 +50,7 @@
 #include <thrift/transport/TSocket.h>
 #include <thrift/transport/TTransportException.h>
 #include <thrift/transport/PlatformSocket.h>
+#include <thrift/transport/SocketCommon.h>
 
 #ifndef SOCKOPT_CAST_T
 #ifndef _WIN32
@@ -77,8 +81,9 @@ namespace transport {
  *
  */
 
-TSocket::TSocket(const string& host, int port)
-  : host_(host),
+TSocket::TSocket(const string& host, int port, std::shared_ptr<TConfiguration> config)
+  : TVirtualTransport(config),
+    host_(host),
     port_(port),
     socket_(THRIFT_INVALID_SOCKET),
     peerPort_(0),
@@ -92,8 +97,9 @@ TSocket::TSocket(const string& host, int port)
     maxRecvRetries_(5) {
 }
 
-TSocket::TSocket(const string& path)
-  : port_(0),
+TSocket::TSocket(const string& path, std::shared_ptr<TConfiguration> config)
+  : TVirtualTransport(config),
+    port_(0),
     path_(path),
     socket_(THRIFT_INVALID_SOCKET),
     peerPort_(0),
@@ -108,8 +114,9 @@ TSocket::TSocket(const string& path)
   cachedPeerAddr_.ipv4.sin_family = AF_UNSPEC;
 }
 
-TSocket::TSocket()
-  : port_(0),
+TSocket::TSocket(std::shared_ptr<TConfiguration> config)
+  : TVirtualTransport(config),
+    port_(0),
     socket_(THRIFT_INVALID_SOCKET),
     peerPort_(0),
     connTimeout_(0),
@@ -123,8 +130,9 @@ TSocket::TSocket()
   cachedPeerAddr_.ipv4.sin_family = AF_UNSPEC;
 }
 
-TSocket::TSocket(THRIFT_SOCKET socket)
-  : port_(0),
+TSocket::TSocket(THRIFT_SOCKET socket, std::shared_ptr<TConfiguration> config)
+  : TVirtualTransport(config),
+    port_(0),
     socket_(socket),
     peerPort_(0),
     connTimeout_(0),
@@ -144,8 +152,10 @@ TSocket::TSocket(THRIFT_SOCKET socket)
 #endif
 }
 
-TSocket::TSocket(THRIFT_SOCKET socket, std::shared_ptr<THRIFT_SOCKET> interruptListener)
-  : port_(0),
+TSocket::TSocket(THRIFT_SOCKET socket, std::shared_ptr<THRIFT_SOCKET> interruptListener,
+                std::shared_ptr<TConfiguration> config)
+  : TVirtualTransport(config),
+    port_(0),
     socket_(socket),
     peerPort_(0),
     interruptListener_(interruptListener),
@@ -255,7 +265,7 @@ void TSocket::openConnection(struct addrinfo* res) {
     return;
   }
 
-  if (!path_.empty()) {
+  if (isUnixDomainSocket()) {
     socket_ = socket(PF_UNIX, SOCK_STREAM, IPPROTO_IP);
   } else {
     socket_ = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
@@ -320,32 +330,16 @@ void TSocket::openConnection(struct addrinfo* res) {
 
   // Connect the socket
   int ret;
-  if (!path_.empty()) {
+  if (isUnixDomainSocket()) {
 
+/*
+ * TODO: seems that windows now support unix sockets,
+ *       see: https://devblogs.microsoft.com/commandline/af_unix-comes-to-windows/
+ */
 #ifndef _WIN32
-    size_t len = path_.size() + 1;
-    if (len > sizeof(((sockaddr_un*)nullptr)->sun_path)) {
-      int errno_copy = THRIFT_GET_SOCKET_ERROR;
-      GlobalOutput.perror("TSocket::open() Unix Domain socket path too long", errno_copy);
-      throw TTransportException(TTransportException::NOT_OPEN, " Unix Domain socket path too long");
-    }
 
     struct sockaddr_un address;
-    address.sun_family = AF_UNIX;
-    memcpy(address.sun_path, path_.c_str(), len);
-
-    auto structlen = static_cast<socklen_t>(sizeof(address));
-
-    if (!address.sun_path[0]) { // abstract namespace socket
-#ifdef __linux__
-      // sun_path is not null-terminated in this case and structlen determines its length
-      structlen -= sizeof(address.sun_path) - len;
-#else
-      GlobalOutput.perror("TSocket::open() Abstract Namespace Domain sockets only supported on linux: ", -99);
-      throw TTransportException(TTransportException::NOT_OPEN,
-                                " Abstract Namespace Domain socket path not supported");
-#endif
-    }
+    socklen_t structlen = fillUnixSocketAddr(address, path_);
 
     ret = connect(socket_, (struct sockaddr*)&address, structlen);
 #else
@@ -414,7 +408,7 @@ done:
     throw TTransportException(TTransportException::NOT_OPEN, "THRIFT_FCNTL() failed", errno_copy);
   }
 
-  if (path_.empty()) {
+  if (!isUnixDomainSocket()) {
     setCachedAddress(res->ai_addr, static_cast<socklen_t>(res->ai_addrlen));
   }
 }
@@ -423,7 +417,7 @@ void TSocket::open() {
   if (isOpen()) {
     return;
   }
-  if (!path_.empty()) {
+  if (isUnixDomainSocket()) {
     unix_open();
   } else {
     local_open();
@@ -431,8 +425,8 @@ void TSocket::open() {
 }
 
 void TSocket::unix_open() {
-  if (!path_.empty()) {
-    // Unix Domain SOcket does not need addrinfo struct, so we pass NULL
+  if (isUnixDomainSocket()) {
+    // Unix Domain Socket does not need addrinfo struct, so we pass NULL
     openConnection(nullptr);
   }
 }
@@ -522,6 +516,7 @@ void TSocket::setSocketFD(THRIFT_SOCKET socket) {
 }
 
 uint32_t TSocket::read(uint8_t* buf, uint32_t len) {
+  checkReadBytesAvailable(len);
   if (socket_ == THRIFT_INVALID_SOCKET) {
     throw TTransportException(TTransportException::NOT_OPEN, "Called read on non-open socket");
   }
@@ -576,6 +571,7 @@ try_again:
         throw TTransportException(TTransportException::INTERRUPTED, "Interrupted");
       }
     } else /* ret == 0 */ {
+      GlobalOutput.perror("TSocket::read() THRIFT_EAGAIN (timed out) after %f ms", recvTimeout_);
       throw TTransportException(TTransportException::TIMED_OUT, "THRIFT_EAGAIN (timed out)");
     }
 
@@ -696,12 +692,20 @@ uint32_t TSocket::write_partial(const uint8_t* buf, uint32_t len) {
   return b;
 }
 
-std::string TSocket::getHost() {
+std::string TSocket::getHost() const {
   return host_;
 }
 
-int TSocket::getPort() {
+int TSocket::getPort() const {
   return port_;
+}
+
+std::string TSocket::getPath() const {
+    return path_;
+}
+
+bool TSocket::isUnixDomainSocket() const {
+    return !path_.empty();
 }
 
 void TSocket::setHost(string host) {
@@ -710,6 +714,10 @@ void TSocket::setHost(string host) {
 
 void TSocket::setPort(int port) {
   port_ = port;
+}
+
+void TSocket::setPath(std::string path) {
+    path_ = path;
 }
 
 void TSocket::setLinger(bool on, int linger) {
@@ -735,7 +743,7 @@ void TSocket::setLinger(bool on, int linger) {
 
 void TSocket::setNoDelay(bool noDelay) {
   noDelay_ = noDelay;
-  if (socket_ == THRIFT_INVALID_SOCKET || !path_.empty()) {
+  if (socket_ == THRIFT_INVALID_SOCKET || isUnixDomainSocket()) {
     return;
   }
 
@@ -813,7 +821,7 @@ void TSocket::setMaxRecvRetries(int maxRecvRetries) {
 
 string TSocket::getSocketInfo() const {
   std::ostringstream oss;
-  if (path_.empty()) {
+  if (!isUnixDomainSocket()) {
     if (host_.empty() || port_ == 0) {
       oss << "<Host: " << getPeerAddress();
       oss << " Port: " << getPeerPort() << ">";
@@ -821,13 +829,17 @@ string TSocket::getSocketInfo() const {
       oss << "<Host: " << host_ << " Port: " << port_ << ">";
     }
   } else {
-    oss << "<Path: " << path_ << ">";
+    std::string fmt_path_ = path_;
+    // Handle printing abstract sockets (first character is a '\0' char):
+    if (!fmt_path_.empty() && fmt_path_[0] == '\0')
+      fmt_path_[0] = '@';
+    oss << "<Path: " << fmt_path_ << ">";
   }
   return oss.str();
 }
 
 std::string TSocket::getPeerHost() const {
-  if (peerHost_.empty() && path_.empty()) {
+  if (peerHost_.empty() && !isUnixDomainSocket()) {
     struct sockaddr_storage addr;
     struct sockaddr* addrPtr;
     socklen_t addrLen;
@@ -865,7 +877,7 @@ std::string TSocket::getPeerHost() const {
 }
 
 std::string TSocket::getPeerAddress() const {
-  if (peerAddress_.empty() && path_.empty()) {
+  if (peerAddress_.empty() && !isUnixDomainSocket()) {
     struct sockaddr_storage addr;
     struct sockaddr* addrPtr;
     socklen_t addrLen;
@@ -909,7 +921,7 @@ int TSocket::getPeerPort() const {
 }
 
 void TSocket::setCachedAddress(const sockaddr* addr, socklen_t len) {
-  if (!path_.empty()) {
+  if (isUnixDomainSocket()) {
     return;
   }
 

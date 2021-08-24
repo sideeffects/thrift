@@ -23,7 +23,7 @@ ENV DEBIAN_FRONTEND noninteractive
 
 RUN apt-get update && \
     apt-get dist-upgrade -y && \
-    apt-get install -y --no-install-recommends \
+    apt-get install -y --no-install-recommends --fix-missing \
       apt \
       apt-transport-https \
       apt-utils \
@@ -118,7 +118,7 @@ RUN \
     mv deimos-openssl-1.1.0h/C/* /usr/include/dmd/druntime/import/C/ && \
     rm -rf deimos-openssl-1.1.0h
 
-ENV DART_VERSION 2.4.0-1
+ENV DART_VERSION 2.7.2-1
 RUN apt-get install -y --no-install-recommends \
       `# Dart dependencies` \
       dart=$DART_VERSION
@@ -126,7 +126,7 @@ ENV PATH /usr/lib/dart/bin:$PATH
 
 RUN apt-get install -y --no-install-recommends \
 `# dotnet core dependencies` \
-      dotnet-sdk-3.1
+      dotnet-sdk-5.0
 
 RUN apt-get install -y --no-install-recommends \
 `# Erlang dependencies` \
@@ -140,19 +140,14 @@ RUN apt-get install -y --no-install-recommends \
       libglib2.0-dev
 
 # golang
-ENV GOLANG_VERSION 1.13.1
+ENV GOLANG_VERSION 1.17
 ENV GOLANG_DOWNLOAD_URL https://golang.org/dl/go$GOLANG_VERSION.linux-amd64.tar.gz
-ENV GOLANG_DOWNLOAD_SHA256 94f874037b82ea5353f4061e543681a0e79657f787437974214629af8407d124
+ENV GOLANG_DOWNLOAD_SHA256 6bf89fc4f5ad763871cf7eac80a2d594492de7a818303283f1366a7f6a30372d
 RUN curl -fsSL "$GOLANG_DOWNLOAD_URL" -o golang.tar.gz && \
       echo "$GOLANG_DOWNLOAD_SHA256  golang.tar.gz" | sha256sum -c - && \
             tar -C /usr/local -xzf golang.tar.gz && \
                   ln -s /usr/local/go/bin/go /usr/local/bin && \
                         rm golang.tar.gz
-
-RUN apt-get install -y --no-install-recommends \
-`# Haskell dependencies` \
-      ghc \
-      cabal-install
 
 RUN apt-get install -y --no-install-recommends \
 `# Haxe dependencies` \
@@ -184,7 +179,8 @@ RUN apt-get install -y --no-install-recommends \
 # Test dependencies for running puppeteer
 RUN apt-get install -y --no-install-recommends \
 `# JS dependencies` \
-      libxss1
+      libxss1 \
+      libxtst6
 
 RUN apt-get install -y --no-install-recommends \
 `# OCaml dependencies` \
@@ -247,7 +243,7 @@ RUN apt-get install -y --no-install-recommends \
       ruby-bundler
 
 # Rust dependencies
-RUN curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain 1.36.0 -y
+RUN curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain 1.40.0 -y
 ENV PATH /root/.cargo/bin:$PATH
 
 # Swift on Linux for cross tests
@@ -256,6 +252,14 @@ RUN cd / && \
     tar xf swift-5.1.4-RELEASE-ubuntu18.04.tar.gz --strip-components=1 && \
     rm swift-5.1.4-RELEASE-ubuntu18.04.tar.gz && \
     swift --version
+
+# Locale(s) for cpp unit tests
+RUN apt-get install -y --no-install-recommends \
+`# Locale dependencies` \
+      locales && \
+    locale-gen en_US.UTF-8 && \
+    locale-gen de_DE.UTF-8 && \
+    update-locale
 
 # cppcheck-1.82 has a nasty cpp parser bug, so we're using something newer
 RUN apt-get install -y --no-install-recommends \
