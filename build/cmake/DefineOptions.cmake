@@ -137,7 +137,7 @@ if(WIN32)
 else()
     set(DEFAULT_BUILD_SHARED_LIBS OFF)
 endif()
-option(BUILD_SHARED_LIBS "Build shared libraries" ${DEFAULT_BUILD_SHARED_LIBS})
+option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 
 if (WITH_SHARED_LIB)
     message(WARNING "WITH_SHARED_LIB is deprecated; use -DBUILD_SHARED_LIBS=ON instead")
