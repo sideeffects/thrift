@@ -541,9 +541,6 @@ shared_ptr<TTransport> TServerSocket::acceptImpl() {
 
   struct THRIFT_POLLFD fds[2];
 
-  int maxEintrs = 5;
-  int numEintrs = 0;
-
   while (true) {
     std::memset(fds, 0, sizeof(fds));
     fds[0].fd = serverSocket_;
@@ -560,7 +557,7 @@ shared_ptr<TTransport> TServerSocket::acceptImpl() {
 
     if (ret < 0) {
       // error cases
-      if (THRIFT_GET_SOCKET_ERROR == THRIFT_EINTR && (numEintrs++ < maxEintrs)) {
+      if (THRIFT_GET_SOCKET_ERROR == THRIFT_EINTR) {
         // THRIFT_EINTR needs to be handled manually and we can tolerate
         // a certain number
         continue;
