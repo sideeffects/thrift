@@ -410,7 +410,8 @@ public:
     old_file.open(output_file_path.c_str(), std::ios::in);
 
     if (old_file) {
-      std::string const old_file_contents(static_cast<std::ostringstream const&>(std::ostringstream() << old_file.rdbuf()).str());
+      std::ostringstream tmp_osstream;
+      std::string const old_file_contents(static_cast<std::ostringstream const&>(tmp_osstream << old_file.rdbuf()).str());
       old_file.close();
 
       if (old_file_contents != str()) {
